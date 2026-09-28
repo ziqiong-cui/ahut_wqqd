@@ -3,8 +3,6 @@
 # @Email: wqqd@spance.xyz
 # @Version：v1.8
 # @Desc:安徽工业大学考勤系统自动签到
-
-
 import base64
 import json
 from datetime import datetime, timezone, timedelta
@@ -15,11 +13,8 @@ import sys
 import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
-
 import aiohttp
 import asyncio
-
-
 """
                 更新日志
 2026年3月26日 14:32:38：
@@ -27,10 +22,9 @@ import asyncio
   但为保证签到接口不因为频繁操作导致失败，上调了签到前的等待时间，并加锁限制
   若您为多名用户进行签到，请自行调整重试次数及等待时间
   
-2026年3月17日 21:39:52:
+2026年3月17日 21:39:52：
   修复了没有在程序结束之前关闭各用户的session，若持久化运行会导致内存泄漏的问题
-
-2026年3月14日 21:57:27:
+2026年3月14日 21:57:27：
   添加了异步并发限制，现在无需担心并发太多导致学校服务器压力过大。
   修复了获取经纬度时保存的数据为str类型，导致无法偏置
   
@@ -49,8 +43,6 @@ import asyncio
   将generate_sign更新为学校现行版本。
   添加了多个随机UA及访问各接口前添加随机延时，模拟人工操作。
 """
-
-
 @dataclass
 class User:
     # 学号(必须填写)
@@ -89,16 +81,12 @@ class User:
         else:
             if self.token: self._session.headers["flysource-auth"] = f"bearer {self.token}"
         return self._session
-
     async def close(self):
         if self._session:
             await self._session.close()
-
-
 ## *------------------------------------------------------* ##
 ##             请在此处完成您的配置 ([]内的为可选列表)             ##
 ## *------------------------------------------------------* ##
-
 # log输出的等级 (logging.[DEBUG,INFO,WARNING,ERROR,CRITICAL])
 #       []内的为可选列表，推荐logging.INFO)
 LOG_GRADE = logging.DEBUG
@@ -109,7 +97,6 @@ USER_LIST = [
     # User(259000000),
     # User(259000001, "诸天神佛"),
     # User(259000003, "保我代码", "password"),
-
     # 此处使用随机学号进行调试，实际情况请使用需要签到学生的学号
     User(249014040)
 ]
@@ -122,49 +109,33 @@ MAX_CONCURRENT = 15
 # 签到请求锁
 SIGN_IN_LOCK = asyncio.Lock()
 ## *------------------------------------------------------* ##
-
-
-
-
-
 ## *------------------------------------------------------* ##
 ##                         日志设置区                         ##
 ## *------------------------------------------------------* ##
-
 # 日志格式设定
 formatter = logging.Formatter(
     fmt='%(levelname)s [%(name)s] (%(asctime)s): %(message)s (Line: %(lineno)d [%(filename)s])',
     datefmt='%Y/%m/%d %H:%M:%S'
 )
-
 # 获取日志记录器，并设定显示等级
 logger = logging.getLogger()
 logger.setLevel(LOG_GRADE)
-
 # 添加控制台handler以输出日志
 console_handler = logging.StreamHandler(stream=sys.stdout)
 console_handler.setFormatter(formatter)
 console_handler.setLevel(logging.DEBUG)
 logger.addHandler(console_handler)
-
 # 屏蔽第三方库的logging日志
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("requests").setLevel(logging.WARNING)
 logging.getLogger("dbutils").setLevel(logging.WARNING)
 logging.getLogger("yagmail").setLevel(logging.WARNING)
 ## *------------------------------------------------------* ##
-
-
-
-
-
 ## *------------------------------------------------------* ##
 ##                         常量声明区                         ##
 ## *------------------------------------------------------* ##
-
 # 学校考勤系统api_url
 API_BASE_URL = "https://xskq.ahut.edu.cn/api"
-
 # 执行完整签到流程所涉及的url
 WEB_DICT = {
     # 获取用户token
@@ -186,7 +157,6 @@ WEB_DICT = {
     "sign_in_result_api": f"{API_BASE_URL}/flySource-yxgl/dormSignStu/getWqdStudentPage"
                           "?taskId={TASK_ID}&xhOrXm=&nowDate={date_str}&userDataType=student&current=1&size=100",
 }
-
 # 可选的UA头列表
 UA_LIST = [
     "Mozilla/5.0 (Linux; Android 15; MIX Fold 4 Build/TKQ1.240502.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/128.0.6613.137 Mobile Safari/537.36 MicroMessenger/8.0.61.2660(0x28003D37) WeChat/arm64 Weixin NetType/WIFI Language/zh_CN ABI/arm64",
@@ -196,29 +166,19 @@ UA_LIST = [
     "Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.61(0x18003D29) NetType/5G Language/zh_CN",
 ]
 ## *------------------------------------------------------* ##
-
-
-
-
-
 ## *------------------------------------------------------* ##
 ##                         功能方法区                         ##
 ## *------------------------------------------------------* ##
-
 def password_md5(pwd: str) -> str:
     """
     使用 MD5 算法对用户密码进行加密。
-
     :param pwd: 需加密的明文字段
     :return: 加密后的字符串
     """
     return hashlib.md5(pwd.encode('utf-8')).hexdigest()
-
-
 def generate_sign(url, token) -> str:
     """
     实时生成指定用户访问指定网页的访问令牌。
-
     :param url: 所需访问的url
     :param token: user所持有的令牌token
     :return: 指定的网页令牌
@@ -234,12 +194,9 @@ def generate_sign(url, token) -> str:
     final_hash = hashlib.md5(raw.encode("utf-8")).hexdigest()
     encoded_time = base64.b64encode(str(timestamp).encode("utf-8")).decode("utf-8")
     return f"{final_hash}1.{encoded_time}"
-
-
 def get_time() -> dict:
     """
     获取当前时间，并以结构化格式返回。
-
     :return: 格式化后的时间
     """
     now = time.localtime()
@@ -254,12 +211,9 @@ def get_time() -> dict:
         "weekday": weekday,
         "full": full_datetime
     }
-
-
 def generate_header(user: User, url: str = None) -> dict:
     """
     为user访问指定url生成对应的请求头，建议一段时间后更新UA
-
     :param user: User对象
     :param url: 所需访问的url
     :return: 访问所需的header
@@ -270,12 +224,9 @@ def generate_header(user: User, url: str = None) -> dict:
         if url:
             header['flysource-sign'] = generate_sign(url, user.token)
     return header
-
-
 def generate_params(user: User):
     """
     为user生成获取token时必须的查询参数
-
     :param user: User对象
     :return: 所需的查询参数字典
     """
@@ -287,11 +238,9 @@ def generate_params(user: User):
         'grant_type': 'password',
         'scope': 'all'
     }
-
 # 签到接口新参数signCode生成方法
 def generate_signCode(timestamp_ms):
     dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc) + timedelta(hours=8)
-
     week = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -300,7 +249,6 @@ def generate_signCode(timestamp_ms):
     tz = "GMT+0800 (中国标准时间)"
     time_str = f"{w} {m} {dt.day:02d} {dt.year} {dt.strftime('%H:%M:%S')} {tz}"
     return hashlib.md5(time_str.encode()).hexdigest()
-
 # 签到接口新参数stuTaskId生成方法
 def generate_stuTaskId(lat, lng, acc, date, taskId, fileId=""):
     data = {
@@ -313,12 +261,10 @@ def generate_stuTaskId(lat, lng, acc, date, taskId, fileId=""):
     }
     json_str = json.dumps(data, separators=(',', ':'))
     return hashlib.md5(json_str.encode()).hexdigest()
-
 # 签到接口新的提交表单
 def generate_data(user: User) -> dict:
     """
     为user生成对应的data用于签到请求时发送
-
     :param user: User对象
     :return: 规范后的data字典
     """
@@ -338,22 +284,13 @@ def generate_data(user: User) -> dict:
         "signKey": user.room_id,
         "signCode": generate_signCode(int(time.time())),
     }
-
-
 ## *------------------------------------------------------* ##
-
-
-
-
-
 ## *------------------------------------------------------* ##
 ##                       主要功能实现区                       ##
 ## *------------------------------------------------------* ##
-
 async def sign_in_by_step(user: User, step: int, debug: bool = False) -> dict:
     """
     为指定user执行step步的签到过程，旨在实现错误重试
-
     :param user: 执行晚寝签到的User对象
     :param step: 当前需要执行的步骤数
     :param debug: 是否处于debug模式
@@ -365,7 +302,6 @@ async def sign_in_by_step(user: User, step: int, debug: bool = False) -> dict:
         if now_time < '21:20:00':
             logger.error(f'当前时间 {now_time} 未到签到时间，不进行签到')
             return {'success': False,'msg':"未到签到时间",'step': -1}
-
     # 获取token
     if step == 0:
         logger.info(f"开始为 {user.student_Id} 获取token")
@@ -511,17 +447,13 @@ async def sign_in_by_step(user: User, step: int, debug: bool = False) -> dict:
                     logger.warning(
                         f"{user.username}({user.student_Id}) 晚寝签到时出现问题：{sign_in_result.get('msg')}")
                     return {'success': False, 'msg': sign_in_result.get('msg'), 'step': step}
-
     # 未知情况或传入的step错误
     else:
         logger.debug(f"出现未知错误，当前参数为：user={user.student_Id},step={step}")
         return {'success': False, 'msg': '', 'step': -1}
-
-
 async def sign_in(user: User, debug: bool = False):
     """
     为单人进行晚寝签到尝试
-
     :param user: 尝试晚寝签到的User对象
     :param debug: 是否为debug模式，此模式下忽略签到时间限制
     :return: {success:签到结果, data:签到过程中出现的错误}
@@ -529,7 +461,6 @@ async def sign_in(user: User, debug: bool = False):
     logger.info(f"为 {user.username}({user.student_Id}) 尝试执行签到")
     step, retries, token_retries = 0, 0, 0
     error_history = set()
-
     while retries < MAX_RETRIES and 0 <= step < 6:
         result = await sign_in_by_step(user, step, debug)
         step = result['step']
@@ -541,28 +472,20 @@ async def sign_in(user: User, debug: bool = False):
                 retries += 1
         # 添加随机延时，模拟手动操作
         await asyncio.sleep(round(random.uniform(0.5,2),2))
-
     if step == 6:
         return {'success': True, 'data': error_history}
     else:
         return {'success': False, 'data': error_history}
-
-
 # 异步执行
 async def main():
-
     semaphore = asyncio.Semaphore(MAX_CONCURRENT)
-
     async def limited_sign_in(user):
         async with semaphore:
             return await sign_in(user, debug=True) # 如需在非签到时间内测试可传入参数debug=True
-
     async_results = await asyncio.gather(
         *(limited_sign_in(u) for u in USER_LIST))
     await asyncio.gather(*[user.close() for user in USER_LIST])
     return {u.student_Id:result for u,result in zip(USER_LIST,async_results)}
-
-
 # 异步阻塞执行(串行执行)
 # async def main():
 #     results = {}
@@ -570,11 +493,7 @@ async def main():
 #         result = await sign_in(u,debug=False) # 如需在非签到时间内测试可传入参数debug=True
 #         results[u.student_Id] = result
 #     return results
-
 ## *------------------------------------------------------* ##
-
-
-
 if __name__ == '__main__':
     start_time = time.time()
     results = asyncio.run(main())
