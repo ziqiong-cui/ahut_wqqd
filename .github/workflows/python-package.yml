@@ -3,6 +3,7 @@ name: AHUT 晚寝自动签到
 on:
   push:
     branches: [ "master" ]
+  workflow_dispatch:
   schedule:
     - cron: '30 13 * * *'  # 每天北京时间 21:30 自动签到
 
